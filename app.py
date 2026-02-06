@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CUSTOM CSS FOR STYLING ---
+# --- CUSTOM CSS ---
 st.markdown("""
     <style>
     .stButton>button {
@@ -58,13 +58,13 @@ st.title("🏡 AI Real Estate Valuator")
 st.markdown("### Professional Property Price Estimation Engine")
 st.markdown("---")
 
-# --- MAIN LAYOUT (2 Columns) ---
+# --- MAIN LAYOUT ---
 col_left, col_right = st.columns([1, 1.5], gap="large")
 
 with col_left:
     st.subheader("📝 Property Details")
     
-    # Use Tabs to organize inputs cleanly
+    # TABS
     tab1, tab2, tab3 = st.tabs(["📏 Size & Rooms", "✨ Features", "📍 Location"])
     
     with tab1:
@@ -98,21 +98,19 @@ with col_left:
         city = st.selectbox("City", city_list)
         zipcode = st.selectbox("Zip Code", zip_list)
 
-    # Convert textual inputs
+    # Convert Inputs
     is_waterfront = 1 if waterfront == "Yes" else 0
 
-    # PREDICT BUTTON
     st.markdown("<br>", unsafe_allow_html=True)
     predict_btn = st.button("🚀 Calculate Valuation")
 
 with col_right:
-    # --- LOGIC & PREDICTION DISPLAY ---
     if predict_btn:
         with st.spinner("Analyzing market data..."):
             # 1. Initialize Input Dict
             input_data = {}
             
-            # 2. Basic Mapping
+            # 2. Basic Features
             input_data['bedrooms'] = bedrooms
             input_data['bathrooms'] = bathrooms
             input_data['sqft_living'] = sqft_living
@@ -124,7 +122,7 @@ with col_right:
             input_data['sqft_above'] = sqft_above
             input_data['sqft_basement'] = sqft_basement
             
-            # 3. Advanced Feature Engineering (Exact Match to Training)
+            # 3. Engineered Features (MUST MATCH TRAINING EXACTLY)
             input_data['house_age'] = 2024 - yr_built
             input_data['effective_age'] = (2024 - yr_renovated) if yr_renovated > 0 else input_data['house_age']
             input_data['was_renovated'] = 1 if yr_renovated > 0 else 0
@@ -164,21 +162,31 @@ with col_right:
             zip_avg_val = zip_mean_dict.get(input_data['zip_encoded'], global_mean)
             city_avg_val = city_mean_dict.get(input_data['city_encoded'], global_mean)
             
+            # --- THE FIX: ADD THESE MISSING INTERMEDIATE COLUMNS ---
+            input_data['zip_avg_price'] = zip_avg_val
+            input_data['city_avg_price'] = city_avg_val
+            # -----------------------------------------------------
+            
             input_data['log_zip_price'] = np.log1p(zip_avg_val)
             input_data['log_city_price'] = np.log1p(city_avg_val)
 
-            # 4. Prepare DataFrame & Predict
+            # 4. Create DataFrame & Sort
             df_input = pd.DataFrame([input_data])
-            df_input = df_input[model_columns] # Sort columns
+            
+            # Align columns strictly
+            # If any columns are still missing (edge case), fill them with 0
+            for col in model_columns:
+                if col not in df_input.columns:
+                    df_input[col] = 0
+            
+            df_input = df_input[model_columns] 
             df_scaled = scaler.transform(df_input)
             
             pred_log = model.predict(df_scaled)[0]
             pred_price = np.expm1(pred_log)
             
-            # --- DISPLAY RESULTS ---
+            # --- RESULTS ---
             st.subheader("📊 Valuation Result")
-            
-            # Styled container for the price
             st.markdown(f"""
             <div class="metric-card">
                 <h3 style="margin:0; color:#555;">Estimated Market Value</h3>
@@ -187,7 +195,6 @@ with col_right:
             </div>
             """, unsafe_allow_html=True)
             
-            # Comparison Metrics
             st.markdown("### 💡 Key Insights")
             m1, m2, m3 = st.columns(3)
             with m1:
@@ -198,6 +205,5 @@ with col_right:
                 st.metric("Location Premium", "High" if input_data['zip_encoded'] > 50 else "Standard")
                 
     else:
-        # Default State
         st.info("👈 Adjust property details in the sidebar or tabs to generate a valuation.")
         st.image("https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80", use_column_width=True, caption="AI-Powered Real Estate Analytics")
